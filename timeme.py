@@ -135,12 +135,16 @@ def BuildAndPrintAllWks(actData):
 
 def PrintWk(wkData, actData):
    #TODO: we arbitrarily use 20 as length for alignment- use instead len(longest(actName))
-   print('{:<20s}{:<0s}'.format('', ' Mon     Tue     Wed     Thu     Fri     Sat     Sun'))
+   print('{:<20s}{:<0s}'.format('', ' Mon     Tue     Wed     Thu     Fri     Sat     Sun     Total'))
    for actNo in actData.keys():
       sAct = '[%d] %s' % (actNo, actData[actNo]['name'])
       sTimes = ''
+      total = timedelta(0)
       for d in range(7):
-         sTimes += ' %s' % str(wkData[d][actNo])[:7]
+         time = wkData[d][actNo]
+         total += time
+         sTimes += ' %s' % str(time)[:7]
+      sTimes += ' %s' % str(total)[:7]
       print('{:<20s}{:<0s}'.format(sAct, sTimes))
       
 if __name__ == '__main__':
