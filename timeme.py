@@ -13,9 +13,11 @@ __version__ = '0.0'
   [X] Print actName in summary
   [X] Improve TimeToWkNumber (* 100)
   [X] Improve ShowData()
+  [ ] Show certain weeks in summary
+  [ ] Edit activities
   [ ] Support adding activities not based on current time
   [ ] Show week start date in summary
-  [ ] Code is assuming that actNos are continuous
+  [X] Code is assuming that actNos are continuous
   [ ] Add support for summary based on time of day
   [ ] Readme
 '''
@@ -101,20 +103,22 @@ def BuildAndPrintAllWks(actData):
               1: {'name': actName, 'times': [{'start': 01:00, 'end': 02:00}, {'start': 03:00, 'end': 04:00}]}
 
    allWks = [wk0, wk1, wk2]
-   wk0 = [[00:00, 00:00, 00:00], [00:00, 00:00, 00:00], [00:00, 00:00, 00:00], [00:00, 00:00, 00:00], ...]
+              Mo     Tue    Wed    Thu    Fri    Sat    Sun  
+   wk[i] = {0: [00:00, 00:00, 00:00, 00:00, 00:00, 00:00, 00:00],
+            1: [00:00, 00:00, 00:00, 00:00, 00:00, 00:00, 00:00],}
    '''
    print("actCount=%d wkCount=%d" % (actCount, wkCount))
    
    # Initialize allWks[]
    allWks = []
-   for i in range(wkCount):  # Note: We assume that actNos in actData are continuous
-      wk = []
+   for i in range(wkCount):
+      wk = {}
       allWks.append(wk)
-      for d in range(7):
-         day = []
-         wk.append(day)
-         for k in range(actCount):
-            day.append(timedelta(0))
+      for actNo in actData.keys():
+         actSum = []
+         wk[actNo] = actSum
+         for d in range(7):
+            actSum.append(timedelta(0))
 
    # Fill allWks[] with actData
    for actNo, act in actData.items():
@@ -126,7 +130,7 @@ def BuildAndPrintAllWks(actData):
             wkIdx = GetWkNumber(time['start']) - baseWk
             dIdx = time['start'].weekday()
             wk = allWks[wkIdx]
-            wk[dIdx][actNo] += ellapsed
+            wk[actNo][dIdx] += ellapsed
 
    # Print allWks[]
    for i in range(len(allWks)):
@@ -135,17 +139,17 @@ def BuildAndPrintAllWks(actData):
 
 def PrintWk(wkData, actData):
    #TODO: we arbitrarily use 20 as length for alignment- use instead len(longest(actName))
-   print('{:<20s}{:<0s}'.format('', ' Mon     Tue     Wed     Thu     Fri     Sat     Sun     Total'))
+   print('{:<20s}{:<0s}'.format('', ' Mon     Tue     Wed     Thu     Fri     Sat     Sun       Total'))
    for actNo in actData.keys():
-      sAct = '[%d] %s' % (actNo, actData[actNo]['name'])
-      sTimes = ''
+      strAct = '[%d] %s' % (actNo, actData[actNo]['name'])
+      strTimes = ''
       total = timedelta(0)
       for d in range(7):
-         time = wkData[d][actNo]
+         time = wkData[actNo][d]
          total += time
-         sTimes += ' %s' % str(time)[:7]
-      sTimes += ' %s' % str(total)[:7]
-      print('{:<20s}{:<0s}'.format(sAct, sTimes))
+         strTimes += ' %s' % str(time)[:7]
+      strTimes += ' | %s' % str(total)[:7]
+      print('{:<20s}{:<0s}'.format(strAct, strTimes))
       
 if __name__ == '__main__':
 
@@ -154,7 +158,8 @@ if __name__ == '__main__':
               (('-add'), {'required': False, 'help': 'Add activity', 'metavar': 'Activity name'}),
               (('-start'), {'required': False, 'help': 'Start activity', 'metavar': 'Activity number'}),
               (('-end'), {'required': False, 'help': 'End activity', 'metavar': 'Activity number'}),
-              (('-cancel'), {'required': False, 'help': 'Cancel activity', 'metavar': 'Activity number'}),]
+              (('-cancel'), {'required': False, 'help': 'Cancel activity', 'metavar': 'Activity number'}),
+              (('-rename'), {'required': False, 'help': 'Rename activity', 'metavar': 'Activity number'}),]
    parser = argparse.ArgumentParser(description='timeme: Utility for timing activities')
    for positional_args, keyword_args in argsAll:
       parser.add_argument(positional_args, **keyword_args)
@@ -184,7 +189,7 @@ if __name__ == '__main__':
          act = FindActivity(actData, actNo)
          times = act['times']
          if (len(times) == 0 or not times[-1]['start']):
-            print ("Activity=%d: Not started." % actNo)
+            print ("Activity=%d: Nothing started." % actNo)
             print (act)
             sys.exit()
          time = times[-1]
@@ -195,11 +200,12 @@ if __name__ == '__main__':
          actNo = int(args['cancel'])
          act = FindActivity(actData, actNo)
          times = act['times']
-         if (len(times) == 0):
+         if (len(times) == 0 or times[-1]['end']):
             print ("Activity=%d: Nothing started" % actNo)
-            print (act)
-            sys.exit() 
+            sys.exit()
          del times[-1]
+      if (args['rename']):
+         pass
       if (args['summary']):
          BuildAndPrintAllWks(actData)
 
