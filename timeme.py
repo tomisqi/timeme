@@ -14,7 +14,7 @@ __version__ = '0.0'
   [X] Improve TimeToWkNumber (* 100)
   [X] Improve ShowData()
   [ ] Show certain weeks in summary
-  [ ] Edit activities
+  [X] Edit activities (rename)
   [ ] Support adding activities not based on current time
   [ ] Show week start date in summary
   [X] Code is assuming that actNos are continuous
@@ -103,7 +103,7 @@ def BuildAndPrintAllWks(actData):
               1: {'name': actName, 'times': [{'start': 01:00, 'end': 02:00}, {'start': 03:00, 'end': 04:00}]}
 
    allWks = [wk0, wk1, wk2]
-              Mo     Tue    Wed    Thu    Fri    Sat    Sun  
+                Mo     Tue    Wed    Thu    Fri    Sat    Sun  
    wk[i] = {0: [00:00, 00:00, 00:00, 00:00, 00:00, 00:00, 00:00],
             1: [00:00, 00:00, 00:00, 00:00, 00:00, 00:00, 00:00],}
    '''
@@ -159,18 +159,16 @@ if __name__ == '__main__':
               (('-start'), {'required': False, 'help': 'Start activity', 'metavar': 'Activity number'}),
               (('-end'), {'required': False, 'help': 'End activity', 'metavar': 'Activity number'}),
               (('-cancel'), {'required': False, 'help': 'Cancel activity', 'metavar': 'Activity number'}),
-              (('-rename'), {'required': False, 'help': 'Rename activity', 'metavar': 'Activity number'}),]
+              (('-rename'), {'required': False, 'nargs': 2, 'help': 'Rename activity', 'metavar': 'Activity number'}),]
    parser = argparse.ArgumentParser(description='timeme: Utility for timing activities')
    for positional_args, keyword_args in argsAll:
       parser.add_argument(positional_args, **keyword_args)
    args = vars(parser.parse_args(sys.argv[1:]))
    #print(args)
 
-   noArgs = len(sys.argv) <= 1
-   if (noArgs):
+   if (len(sys.argv) <= 1):
       print ("Use -h for help")
-   showData = args['show'] or noArgs
-
+      
    actData = LoadYaml()
    currentTime = datetime.now()
    act = None
@@ -205,7 +203,13 @@ if __name__ == '__main__':
             sys.exit()
          del times[-1]
       if (args['rename']):
-         pass
+         actNo = int(args['rename'][0])
+         act = FindActivity(actData, actNo)
+         oldName = act['name']
+         newName = args['rename'][1]
+         act['name'] = newName
+         print ("Changed: %s -> %s" % (oldName, newName))
+         
       if (args['summary']):
          BuildAndPrintAllWks(actData)
 
@@ -218,13 +222,12 @@ if __name__ == '__main__':
          actData = {0: None}
          actData[0] = act
          print ("First entry in actData: %s" % actData)
-      showData = True
 
    if (act):
       print("Ok.")
       print("Activity=%s" % act['name'])
       
-   if (showData):
+   if (args['show']):
       ShowData(actData)
 
    SaveToYaml(actData)
