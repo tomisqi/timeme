@@ -16,7 +16,7 @@ __version__ = '0.0'
   [ ] Show certain weeks in summary
   [X] Edit activities (rename)
   [ ] Support adding activities not based on current time
-  [ ] Show week start date in summary
+  [X] Show week start date in summary
   [X] Code is assuming that actNos are continuous
   [ ] Add support for summary based on time of day
   [ ] Readme
@@ -25,7 +25,7 @@ __version__ = '0.0'
 import sys
 import argparse
 import yaml
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 YAML_FILE = 'timeme_data.yaml'
 SUMMARY_WK_ACT = 'wk_act'
@@ -90,6 +90,10 @@ def GetWkNumber(dtime):
    wkNo = yrNo * 53 + wk # Note: There are max 53 weeks per year
    return wkNo
 
+def GetWkStartDate(dtime):
+   d = dtime.day - dtime.weekday() # This gives us Monday for any dtime
+   return date(dtime.year, dtime.month, d)
+
 def BuildAndPrintAllWks(actData):
    actCount = len(actData.items())
 
@@ -98,7 +102,7 @@ def BuildAndPrintAllWks(actData):
    baseWk = GetWkNumber(timeRange['min'])
    wkCount = 1 + (GetWkNumber(timeRange['max']) - baseWk)
    '''
-   Note: Example of how data could like:
+   Example of how data could like:
    actData = {0: {'name': actName, 'times': [{'start': 01:00, 'end': 02:00}, {'start': 03:00, 'end': 04:00}],
               1: {'name': actName, 'times': [{'start': 01:00, 'end': 02:00}, {'start': 03:00, 'end': 04:00}]}
 
@@ -125,7 +129,7 @@ def BuildAndPrintAllWks(actData):
       times = act['times']
       for i in range(len(times)):
          time = times[i]
-         if (time['end']): # Only edit time in activities that have ended
+         if (time['end']): # Only show time for activities that have ended
             ellapsed = time['end'] - time['start']
             wkIdx = GetWkNumber(time['start']) - baseWk
             dIdx = time['start'].weekday()
@@ -133,12 +137,16 @@ def BuildAndPrintAllWks(actData):
             wk[actNo][dIdx] += ellapsed
 
    # Print allWks[]
-   for i in range(len(allWks)):
-      print ("Wk: %d " % (baseWk + i)) # TODO: Use week start date instead
+   mondayWkDate = GetWkStartDate(timeRange['max'])
+   sevenDaysDelta = timedelta(days=7)
+   for i in reversed(range(len(allWks))):
+      print ("Wk: %s" % mondayWkDate)
       PrintWk(allWks[i], actData)
+      mondayWkDate -= sevenDaysDelta
+      print ()
+      
 
 def PrintWk(wkData, actData):
-   #TODO: we arbitrarily use 20 as length for alignment- use instead len(longest(actName))
    print('{:<20s}{:<0s}'.format('', ' Mon     Tue     Wed     Thu     Fri     Sat     Sun       Total'))
    for actNo in actData.keys():
       strAct = '[%d] %s' % (actNo, actData[actNo]['name'])
@@ -154,17 +162,17 @@ def PrintWk(wkData, actData):
 if __name__ == '__main__':
 
    argsAll = [(('--show'), {'required': False, 'help': 'Show activities', 'action': 'store_const', 'const': True}),
-              (('--summary'), {'required': False, 'help': 'Summary of activities', 'action': 'store_const', 'const': True}),
+              (('--summary'), {'required': False, 'nargs': '?', 'help': 'Summary of activities', 'const':'-1', 'default':None}),
               (('-add'), {'required': False, 'help': 'Add activity', 'metavar': 'Activity name'}),
               (('-start'), {'required': False, 'help': 'Start activity', 'metavar': 'Activity number'}),
               (('-end'), {'required': False, 'help': 'End activity', 'metavar': 'Activity number'}),
               (('-cancel'), {'required': False, 'help': 'Cancel activity', 'metavar': 'Activity number'}),
-              (('-rename'), {'required': False, 'nargs': 2, 'help': 'Rename activity', 'metavar': 'Activity number'}),]
+              (('-rename'), {'required': False, 'nargs': 2, 'help': 'Rename activity', 'metavar': 'Activity number New name'}),]
    parser = argparse.ArgumentParser(description='timeme: Utility for timing activities')
    for positional_args, keyword_args in argsAll:
       parser.add_argument(positional_args, **keyword_args)
    args = vars(parser.parse_args(sys.argv[1:]))
-   #print(args)
+   # print(args)
 
    if (len(sys.argv) <= 1):
       print ("Use -h for help")
@@ -208,9 +216,9 @@ if __name__ == '__main__':
          oldName = act['name']
          newName = args['rename'][1]
          act['name'] = newName
-         print ("Changed: %s -> %s" % (oldName, newName))
-         
+         print ("Changed: %s -> %s" % (oldName, newName))         
       if (args['summary']):
+         (wkStart, wkEnd) = (0, 1)
          BuildAndPrintAllWks(actData)
 
    if (args['add']):
