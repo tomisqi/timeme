@@ -19,7 +19,7 @@ __version__ = '0.0'
   [X] Show week start date in summary
   [X] Code is assuming that actNos are continuous
   [ ] Add support for summary based on time of day
-  [ ] Add clear
+  [X] Add remove
   [ ] Readme
 '''
 
@@ -58,6 +58,7 @@ def FindUnusedActNo(actData):
       if (actNo > result):
          break
       result += 1
+      
    return result
 
 def BuildActivity(name):
@@ -81,18 +82,69 @@ def FindMaxMinTime(actData):
             result['min'] = time
          if (time > result['max']):
             result['max'] = time
+            
    return result
       
-def GetWkNumber(dtime):
-   yr = dtime.year
+def GetWkNumber(dt):
+   yr = dt.year
    yrNo = yr - YEAR0
-   wk = dtime.isocalendar()[1] - 1 # Note: isocalendar()[1] gives us the week number
+   wk = dt.isocalendar()[1] - 1 # Note: isocalendar()[1] gives us the week number
    wkNo = yrNo * 53 + wk # Note: There are max 53 weeks per year
+   
    return wkNo
 
-def GetMondayDateTime(dtime):
-   d = dtime.day - dtime.weekday() # This gives us Monday for any dtime
-   return datetime(dtime.year, dtime.month, d) # (time=00:00)
+def GetMondayDateTime(dt):
+   tmp = dt - timedelta(days=dt.weekday()) # This gives us Monday for any datetime
+   return datetime(tmp.year, tmp.month, tmp.day) # New datetime object w/ time=00:00
+
+def StartActivity(actData, actNo):
+   act = FindActivity(actData, actNo)
+   newtime = {'start': currentTime, 'end': None}
+   times = act['times']
+   if (len(times) == 0 or times[-1]['end']):
+      act['times'].append(newtime) # append only if we have finished previous or is first
+   else:
+      times[-1] = newtime
+      
+   return act
+
+def EndActivity(actData, actNo):
+   act = FindActivity(actData, actNo)
+   times = act['times']
+   if (len(times) == 0 or not times[-1]['start']):
+      print ("Activity=%d: Nothing started." % actNo)
+      print (act)
+      sys.exit()
+   time = times[-1]
+   time['end'] = currentTime
+   ellapsed = time['end'] - time['start']
+   print("Ellapsed=%s" % str(ellapsed))
+   
+   return act
+
+def CancelActivity(actData, actNo):
+   act = FindActivity(actData, actNo)
+   times = act['times']
+   if (len(times) == 0 or times[-1]['end']):
+      print ("Activity=%d: Nothing started" % actNo)
+      sys.exit()
+   del times[-1]
+
+   return act
+
+def RenameActivity(actData, actNo, newName):
+   act = FindActivity(actData, actNo)
+   oldName = act['name']
+   act['name'] = newName
+   print ("Changed: %s -> %s" % (oldName, newName))
+
+   return act
+
+def RemoveActivity(actData, actNo):
+   act = FindActivity(actData, actNo)
+   del actData[actNo]
+
+   return act
 
 def BuildAndPrintWks(actData, wkCount):
    '''
@@ -109,7 +161,7 @@ def BuildAndPrintWks(actData, wkCount):
    mondayDt = GetMondayDateTime(datetime.now()) # This is the current week's monday
    startDt = mondayDt - timedelta(weeks=wkCount - 1)
    endDt = mondayDt + timedelta(weeks=1) # Go to next monday
-   print("Showing actCount=%d from startDate=%s" % (actCount, startDt.date()))
+   print("Showing %d weeks from today's week" % (wkCount))
    
    # Initialize wks[]
    wks = []
@@ -164,7 +216,8 @@ if __name__ == '__main__':
               (('-start'), {'required': False, 'help': 'Start activity', 'metavar': 'Activity number'}),
               (('-end'), {'required': False, 'help': 'End activity', 'metavar': 'Activity number'}),
               (('-cancel'), {'required': False, 'help': 'Cancel activity', 'metavar': 'Activity number'}),
-              (('-rename'), {'required': False, 'nargs': 2, 'help': 'Rename activity', 'metavar': 'Activity number New name'}),]
+              (('-rename'), {'required': False, 'nargs': 2, 'help': 'Rename activity', 'metavar': 'Activity number New name'}),
+              (('-remove'), {'required': False, 'help': 'Remove activity', 'metavar': 'Activity number'}),]
    parser = argparse.ArgumentParser(description='timeme: Utility for timing activities')
    for positional_args, keyword_args in argsAll:
       parser.add_argument(positional_args, **keyword_args)
@@ -179,44 +232,19 @@ if __name__ == '__main__':
    act = None
    if (actData):
       if (args['start']):
-         actNo = int(args['start'])
-         act = FindActivity(actData, actNo)
-         newtime = {'start': currentTime, 'end': None}
-         times = act['times']
-         if (len(times) == 0 or times[-1]['end']):
-            act['times'].append(newtime) # append only if we have finished previous or is first
-         else:
-            times[-1] = newtime
+         act = StartActivity(actData, int(args['start']))
       if (args['end']):
-         actNo = int(args['end'])
-         act = FindActivity(actData, actNo)
-         times = act['times']
-         if (len(times) == 0 or not times[-1]['start']):
-            print ("Activity=%d: Nothing started." % actNo)
-            print (act)
-            sys.exit()
-         time = times[-1]
-         time['end'] = currentTime
-         ellapsed = time['end'] - time['start']
-         print("Ellapsed=%s" % str(ellapsed))
+         act = EndActivity(actData, int(args['end']))
       if (args['cancel']):
-         actNo = int(args['cancel'])
-         act = FindActivity(actData, actNo)
-         times = act['times']
-         if (len(times) == 0 or times[-1]['end']):
-            print ("Activity=%d: Nothing started" % actNo)
-            sys.exit()
-         del times[-1]
+         act = CancelActivity(actData, int(args['cancel']))
       if (args['rename']):
-         actNo = int(args['rename'][0])
-         act = FindActivity(actData, actNo)
-         oldName = act['name']
-         newName = args['rename'][1]
-         act['name'] = newName
-         print ("Changed: %s -> %s" % (oldName, newName))         
+         act = RenameActivity(actData, int(args['rename'][0]), args['rename'][1])
+      if (args['remove']):
+         act = RemoveActivity(actData, int(args['remove']))
       if (args['summary']):
-         wkCount = args['summary'] # wkCount is used to determine num of weeks from now
-         BuildAndPrintWks(actData, wkCount)
+         BuildAndPrintWks(actData, args['summary'])
+      if (args['show']):
+         ShowData(actData)
 
    if (args['add']):
       act = BuildActivity(args['add'])
@@ -232,7 +260,4 @@ if __name__ == '__main__':
       print("Ok.")
       print("Activity=%s" % act['name'])
       
-   if (args['show']):
-      ShowData(actData)
-
    SaveToYaml(actData)
