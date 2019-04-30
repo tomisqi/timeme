@@ -13,12 +13,13 @@ __version__ = '0.0'
   [X] Print actName in summary
   [X] Improve TimeToWkNumber (* 100)
   [X] Improve ShowData()
-  [ ] Show certain weeks in summary
+  [X] Show certain weeks in summary
   [X] Edit activities (rename)
   [ ] Support adding activities not based on current time
   [X] Show week start date in summary
   [X] Code is assuming that actNos are continuous
   [ ] Add support for summary based on time of day
+  [ ] Add clear
   [ ] Readme
 '''
 
@@ -28,7 +29,6 @@ import yaml
 from datetime import datetime, timedelta, date
 
 YAML_FILE = 'timeme_data.yaml'
-SUMMARY_WK_ACT = 'wk_act'
 YEAR0 = 2019
 
 def SaveToYaml(actData):
@@ -90,61 +90,58 @@ def GetWkNumber(dtime):
    wkNo = yrNo * 53 + wk # Note: There are max 53 weeks per year
    return wkNo
 
-def GetWkStartDate(dtime):
+def GetMondayDateTime(dtime):
    d = dtime.day - dtime.weekday() # This gives us Monday for any dtime
-   return date(dtime.year, dtime.month, d)
+   return datetime(dtime.year, dtime.month, d) # (time=00:00)
 
-def BuildAndPrintAllWks(actData):
-   actCount = len(actData.items())
-
-   # Find wkCount and baseWk
-   timeRange = FindMaxMinTime(actData)
-   baseWk = GetWkNumber(timeRange['min'])
-   wkCount = 1 + (GetWkNumber(timeRange['max']) - baseWk)
+def BuildAndPrintWks(actData, wkCount):
    '''
    Example of how data could like:
    actData = {0: {'name': actName, 'times': [{'start': 01:00, 'end': 02:00}, {'start': 03:00, 'end': 04:00}],
               1: {'name': actName, 'times': [{'start': 01:00, 'end': 02:00}, {'start': 03:00, 'end': 04:00}]}
 
-   allWks = [wk0, wk1, wk2]
+   wks = [wk0, wk1, wk2]
                 Mo     Tue    Wed    Thu    Fri    Sat    Sun  
    wk[i] = {0: [00:00, 00:00, 00:00, 00:00, 00:00, 00:00, 00:00],
             1: [00:00, 00:00, 00:00, 00:00, 00:00, 00:00, 00:00],}
    '''
-   print("actCount=%d wkCount=%d" % (actCount, wkCount))
+   actCount = len(actData.items())
+   mondayDt = GetMondayDateTime(datetime.now()) # This is the current week's monday
+   startDt = mondayDt - timedelta(weeks=wkCount - 1)
+   endDt = mondayDt + timedelta(weeks=1) # Go to next monday
+   print("Showing actCount=%d from startDate=%s" % (actCount, startDt.date()))
    
-   # Initialize allWks[]
-   allWks = []
+   # Initialize wks[]
+   wks = []
    for i in range(wkCount):
       wk = {}
-      allWks.append(wk)
+      wks.append(wk)
       for actNo in actData.keys():
          actSum = []
          wk[actNo] = actSum
          for d in range(7):
             actSum.append(timedelta(0))
 
-   # Fill allWks[] with actData
+   # Fill wks[] with actData
+   baseWk = GetWkNumber(startDt)
    for actNo, act in actData.items():
       times = act['times']
       for i in range(len(times)):
          time = times[i]
-         if (time['end']): # Only show time for activities that have ended
-            ellapsed = time['end'] - time['start']
-            wkIdx = GetWkNumber(time['start']) - baseWk
-            dIdx = time['start'].weekday()
-            wk = allWks[wkIdx]
-            wk[actNo][dIdx] += ellapsed
+         if (startDt <= time['start'] and time['start'] < endDt):
+            if (time['end']): # Only show time for activities that have ended
+               ellapsed = time['end'] - time['start']
+               wkIdx = GetWkNumber(time['start']) - baseWk
+               dIdx = time['start'].weekday()
+               wk = wks[wkIdx]
+               wk[actNo][dIdx] += ellapsed
 
-   # Print allWks[]
-   mondayWkDate = GetWkStartDate(timeRange['max'])
+   # Print wks[]
    sevenDaysDelta = timedelta(days=7)
-   for i in reversed(range(len(allWks))):
-      print ("Wk: %s" % mondayWkDate)
-      PrintWk(allWks[i], actData)
-      mondayWkDate -= sevenDaysDelta
+   for i in reversed(range(len(wks))):
+      print ("Wk: %s" % (startDt + i * sevenDaysDelta).date())
+      PrintWk(wks[i], actData)
       print ()
-      
 
 def PrintWk(wkData, actData):
    print('{:<20s}{:<0s}'.format('', ' Mon     Tue     Wed     Thu     Fri     Sat     Sun       Total'))
@@ -162,7 +159,7 @@ def PrintWk(wkData, actData):
 if __name__ == '__main__':
 
    argsAll = [(('--show'), {'required': False, 'help': 'Show activities', 'action': 'store_const', 'const': True}),
-              (('--summary'), {'required': False, 'nargs': '?', 'help': 'Summary of activities', 'const':'-1', 'default':None}),
+              (('--summary'), {'required': False, 'type': int, 'nargs': '?', 'help': 'Summary of activities by week. [wkCount] is used to determine number of weeks from now (default=1)', 'metavar': 'wkCount', 'const': 1, 'default': None}),
               (('-add'), {'required': False, 'help': 'Add activity', 'metavar': 'Activity name'}),
               (('-start'), {'required': False, 'help': 'Start activity', 'metavar': 'Activity number'}),
               (('-end'), {'required': False, 'help': 'End activity', 'metavar': 'Activity number'}),
@@ -218,8 +215,8 @@ if __name__ == '__main__':
          act['name'] = newName
          print ("Changed: %s -> %s" % (oldName, newName))         
       if (args['summary']):
-         (wkStart, wkEnd) = (0, 1)
-         BuildAndPrintAllWks(actData)
+         wkCount = args['summary'] # wkCount is used to determine num of weeks from now
+         BuildAndPrintWks(actData, wkCount)
 
    if (args['add']):
       act = BuildActivity(args['add'])
