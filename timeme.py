@@ -1,28 +1,16 @@
 #!/usr/bin/python
-"""  timeme.py: Utility for timing activities
+"""  timeme.py: Utility to time weekly activities
      For help use: python3 timeme.py -h
 
      Author: Antonio Fiallos (afiallosh@gmail.com)
 """
-__version__ = '0.0'
+__version__ = '0.1'
 
 '''
   TODOs:
-  [X] Remove the need to specify wk_act in summary
-  [X] Show week start when presenting summary
-  [X] Print actName in summary
-  [X] Improve TimeToWkNumber (* 100)
-  [X] Improve ShowData()
-  [X] Show certain weeks in summary
-  [X] Edit activities (rename)
   [ ] Support adding activities not based on current time
-  [X] Show week start date in summary
-  [X] Code is assuming that actNos are continuous
-  [ ] Add support for summary based on time of day
-  [X] Add remove
-  [ ] Readme
+  [ ] Add support for summary based on time of day > export this data
 '''
-
 import sys
 import argparse
 import yaml
@@ -43,14 +31,6 @@ def LoadYaml():
       print ("File \"%s\" not found. Create actvities with -add." % YAML_FILE)
       actData = None
    return actData
-
-def ShowData(actData):
-   for actNo, act in actData.items():
-      print ('[%d]: %s' % (actNo, act['name']))
-      times = act['times']
-      if (times):
-         for i in range(len(times)):
-            print('start:%s  end:%s' % (times[i]['start'], times[i]['end']))
 
 def FindUnusedActNo(actData):
    result = 0
@@ -97,12 +77,20 @@ def GetMondayDateTime(dt):
    tmp = dt - timedelta(days=dt.weekday()) # This gives us Monday for any datetime
    return datetime(tmp.year, tmp.month, tmp.day) # New datetime object w/ time=00:00
 
+def DumpActivityData(actData):
+   for actNo, act in actData.items():
+      print ('[%d]: %s' % (actNo, act['name']))
+      times = act['times']
+      if (times):
+         for i in range(len(times)):
+            print('start:%s  end:%s' % (times[i]['start'], times[i]['end']))
+
 def StartActivity(actData, actNo):
    act = FindActivity(actData, actNo)
    newtime = {'start': currentTime, 'end': None}
    times = act['times']
    if (len(times) == 0 or times[-1]['end']):
-      act['times'].append(newtime) # append only if we have finished previous or is first
+      act['times'].append(newtime) # Append only if we have finished previous or is first
    else:
       times[-1] = newtime
       
@@ -161,7 +149,7 @@ def BuildAndPrintWks(actData, wkCount):
    mondayDt = GetMondayDateTime(datetime.now()) # This is the current week's monday
    startDt = mondayDt - timedelta(weeks=wkCount - 1)
    endDt = mondayDt + timedelta(weeks=1) # Go to next monday
-   print("Showing %d weeks from today's week" % (wkCount))
+   print("Showing %d week(s) in the past." % (wkCount))
    
    # Initialize wks[]
    wks = []
@@ -210,23 +198,27 @@ def PrintWk(wkData, actData):
       
 if __name__ == '__main__':
 
-   argsAll = [(('--show'), {'required': False, 'help': 'Show activities', 'action': 'store_const', 'const': True}),
-              (('--summary'), {'required': False, 'type': int, 'nargs': '?', 'help': 'Summary of activities by week. [wkCount] is used to determine number of weeks from now (default=1)', 'metavar': 'wkCount', 'const': 1, 'default': None}),
-              (('-add'), {'required': False, 'help': 'Add activity', 'metavar': 'Activity name'}),
-              (('-start'), {'required': False, 'help': 'Start activity', 'metavar': 'Activity number'}),
-              (('-end'), {'required': False, 'help': 'End activity', 'metavar': 'Activity number'}),
-              (('-cancel'), {'required': False, 'help': 'Cancel activity', 'metavar': 'Activity number'}),
-              (('-rename'), {'required': False, 'nargs': 2, 'help': 'Rename activity', 'metavar': 'Activity number New name'}),
-              (('-remove'), {'required': False, 'help': 'Remove activity', 'metavar': 'Activity number'}),]
-   parser = argparse.ArgumentParser(description='timeme: Utility for timing activities')
+   argsAll = [(('--dump'), {'required': False, 'help': 'Dump data of all activities', 'action': 'store_const', 'const': True}),
+              (('--summary'), {'required': False, 'type': int, 'nargs': '?', 'help': 'Summary of activities by week. [wkCount] is used to determine number of weeks from now (default=1)', 'metavar': 'wkCount', 'const': 1, 'default': None}), # Note: if --summary is present but no argument, 1 is assigned. If not present, None is assigned
+              (('-add'), {'required': False, 'help': 'Add activity', 'metavar': 'ActivityName'}),
+              (('-start'), {'required': False, 'help': 'Start activity', 'metavar': 'ActivityNumber'}),
+              (('-end'), {'required': False, 'help': 'End activity', 'metavar': 'ActivityNumber'}),
+              (('-cancel'), {'required': False, 'help': 'Cancel activity', 'metavar': 'ActivityNumber'}),
+              (('-rename'), {'required': False, 'nargs': 2, 'help': 'Rename activity', 'metavar': ('ActivityNumber','NewName')}),
+              (('-remove'), {'required': False, 'help': 'Remove activity', 'metavar': 'ActivityNumber'}),]
+
+   # Setup the argument parser
+   parser = argparse.ArgumentParser(description='timeme: Utility to time weekly activities')
    for positional_args, keyword_args in argsAll:
       parser.add_argument(positional_args, **keyword_args)
+
+   # Save result from parser in args
    args = vars(parser.parse_args(sys.argv[1:]))
    # print(args)
 
    if (len(sys.argv) <= 1):
       print ("Use -h for help")
-      
+
    actData = LoadYaml()
    currentTime = datetime.now()
    act = None
@@ -243,8 +235,8 @@ if __name__ == '__main__':
          act = RemoveActivity(actData, int(args['remove']))
       if (args['summary']):
          BuildAndPrintWks(actData, args['summary'])
-      if (args['show']):
-         ShowData(actData)
+      if (args['dump']):
+         DumpActivityData(actData)
 
    if (args['add']):
       act = BuildActivity(args['add'])
